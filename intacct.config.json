@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "uom-groups": {
+      "use_query": true,
+      "query": { "object": "inventory-control/unit-of-measure-group", "fields": ["id", "key"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/inventory-control/unit-of-measure-group",
+      "dev_create_path": "/objects/inventory-control/unit-of-measure-group",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "entities": {
+      "use_query": true,
+      "query": { "object": "company-config/entity", "fields": ["id", "key"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/company-config/entity",
+      "dev_create_path": "/objects/company-config/entity",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "departments": {
+      "use_query": true,
+      "query": { "object": "company-config/department", "fields": ["id", "key", "name", "status"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/company-config/department",
+      "dev_create_path": "/objects/company-config/department",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "locations": {
+      "use_query": true,
+      "query": { "object": "company-config/location", "fields": ["id", "key"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/company-config/location",
+      "dev_create_path": "/objects/company-config/location",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "items": {
+      "use_query": true,
+      "query": { "object": "inventory-control/item", "fields": ["id", "key"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/inventory-control/item",
+      "dev_create_path": "/objects/inventory-control/item",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "uom": {
+      "use_query": true,
+      "query": { "object": "inventory-control/unit-of-measure", "fields": [
+        "id", "key", "parent.id", "abbreviation", "numberOfDecimalPlaces", "conversionFactor"
+      ], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/inventory-control/unit-of-measure",
+      "dev_create_path": "/objects/inventory-control/unit-of-measure",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "customers": {
+      "use_query": true,
+      "query": { "object": "accounts-receivable/customer", "fields": [
+        "id", "key", "name", "contacts.default.email1",
+        "status", "currency", "deliveryOptions", "emailOptIn", "isOnHold", "isOneTimeUse",
+        "notes", "resaleNumber", "taxId", "creditLimit", "overridePriceList",
+        "enableOnlineCardPayment", "enableOnlineACHPayment", "customerRestriction"
+      ], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/accounts-receivable/customer",
+      "dev_create_path": "/objects/accounts-receivable/customer",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "warehouses": {
+      "use_query": true,
+      "query": { "object": "inventory-control/warehouse", "fields": ["id", "key", "name", "status", "location.id"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/inventory-control/warehouse",
+      "dev_create_path": "/objects/inventory-control/warehouse",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    },
+    "pricelists": {
+      "use_query": false,
+      "query": { "object": "order-entry/price-list", "fields": ["priceListId", "key", "name", "status"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/order-entry/price-list",
+      "dev_create_path": "/objects/order-entry/price-list",
+      "list_params": { "limit": 100, "offset": 0 },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    }
+    ,
+    "product-lines": {
+      "use_query": true,
+      "query": { "object": "inventory-control/product-line", "fields": ["id", "key"], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/inventory-control/product-line",
+      "dev_create_path": "/objects/inventory-control/product-line",
+      "list_params": { },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    }
+    ,
+    "price-list-entries": {
+      "use_query": false,
+      "query": { "object": "order-entry/price-list-entry", "fields": [
+        "key", "priceList.priceListId", "item.id", "productLine.id", "value", "valueType", "isFixedPrice",
+        "minimumQuantity", "maximumQuantity", "currency", "status", "startDate", "endDate"
+      ], "size": 1000, "start": 1 },
+      "prod_list_path": "/objects/order-entry/price-list-entry",
+      "dev_create_path": "/objects/order-entry/price-list-entry",
+      "list_params": { "limit": 100, "offset": 0 },
+      "list_data_key": "ia::result",
+      "next_page_key": "ia::meta.next",
+      "since_param": ""
+    }
+  }
+}

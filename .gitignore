@@ -1,0 +1,68 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+*.env
+
+# Database files
+*.sqlite3
+*.sqlite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyo
+*.pyd
+.pytest_cache/
+*.cover
+.coverage
+.coverage.*
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Instance-specific config
+instance/
+config.local.py
+
+# Secrets & credentials
+*.key
+*.pem
+*.crt
+secrets/
+credentials/
