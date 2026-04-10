@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import click
+
+log = logging.getLogger(__name__)
 
 from .config import API_BASE_DEV, API_BASE_PROD, COMPANY_DEV, DEFAULT_UOM_GROUP_ID_DEV, DEFAULT_LOCATION_ID_DEV
 from .http import http_get, http_patch_json, http_post_json
@@ -23,6 +26,9 @@ from .storage import DevIndex, IDMapper, LocationMap, UoMGroupMap
 
 
 def _find_dev_by_key(entity: str, key_name: str, key_value: str, cfg: dict[str, Any], dt: str) -> dict[str, Any] | None:
+    """Look up a Dev record by logical ID. On cache miss this does a full paginated scan
+    of all Dev records for the entity type — O(n) per miss but populates the DevIndex
+    cache so subsequent lookups are O(1)."""
     ent = cfg["entities"][entity]
     key_value_n = (key_value or "").strip()
     key_value_l = key_value_n.lower()
@@ -88,8 +94,7 @@ def ensure_dev_entity(
                         dloc = pobj.get("location") if isinstance(pobj.get("location"), dict) else {}
                         prod_loc_id = str(dloc.get("id") or pobj.get("locationId") or "").strip()
                 except Exception:
-                    # best-effort; fall through to default handling
-                    pass
+                    log.debug("Failed to fetch warehouse detail from Prod for key=%s", prod_key, exc_info=True)
         dev_loc_id: str | None = None
         if prod_loc_id:
             dev_loc_id = LocationMap().get(prod_loc_id)

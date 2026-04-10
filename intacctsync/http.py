@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 import asyncio
 import threading
 from email.utils import parsedate_to_datetime
+
+log = logging.getLogger(__name__)
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
@@ -115,6 +118,7 @@ def _ensure_token(env: str) -> str:
                 cache.put(env, company, username, scope, at, rt, exp_at)
                 return at
         except Exception:
+            log.debug("Token refresh failed for %s/%s, clearing cache", env, company, exc_info=True)
             cache.clear(env, company, username, scope)
 
     # Fresh token
