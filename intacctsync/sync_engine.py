@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Tuple
+from typing import Any
 
 import click
 
@@ -55,7 +55,7 @@ def ensure_dev_entity(
     dt: str,
     dry_run: bool,
     pt: str | None = None,
-) -> Tuple[str | None, bool]:
+) -> tuple[str | None, bool]:
     from .config import load_config  # local import to avoid cycles
 
     cfg = load_config()

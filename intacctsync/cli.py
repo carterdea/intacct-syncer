@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from tenacity import RetryError
 
 import click
+from tenacity import RetryError
 
 from .config import (
     API_BASE_DEV,
@@ -15,6 +15,7 @@ from .config import (
 )
 from .http import dev_token, http_get, http_patch_json, http_post_json, prod_token
 from .paginate import fetch_all
+from .sync_engine import ensure_dev_entity
 
 
 def _format_error(exc: Exception) -> str:
@@ -25,7 +26,6 @@ def _format_error(exc: Exception) -> str:
         except Exception:
             return str(exc)
     return str(exc)
-from .sync_engine import ensure_dev_entity
 
 
 @click.group()

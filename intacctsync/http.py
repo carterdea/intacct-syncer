@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import base64
-import json
 import time
 from typing import Any
 
-import httpx
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 import asyncio
-from typing import Any as _Any
 import threading
 from email.utils import parsedate_to_datetime
+
+import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 
 from .config import (
     API_BASE_DEV,
@@ -44,21 +42,6 @@ def _build_url(base: str, path: str, company: str) -> str:
     return f"{base.rstrip('/')}/{path.lstrip('/')}"
 
 
-def _b64url_decode(seg: str) -> bytes:
-    seg += "=" * (-len(seg) % 4)
-    return base64.urlsafe_b64decode(seg)
-
-
-def _decode_jwt(token: str) -> dict[str, Any]:
-    try:
-        parts = token.split(".")
-        if len(parts) < 2:
-            return {}
-        payload = json.loads(_b64url_decode(parts[1]))
-        return payload if isinstance(payload, dict) else {}
-    except Exception:
-        return {}
-
 
 def _compose_username(user: str, company: str, entity: str | None) -> str:
     user = user or ""
@@ -83,10 +66,6 @@ def _token_full(auth_url: str, client_id: str, client_secret: str, username: str
     r.raise_for_status()
     return r.json()
 
-
-def _token(auth_url: str, client_id: str, client_secret: str, username: str, scope: str = "") -> str:
-    data = _token_full(auth_url, client_id, client_secret, username, scope)
-    return data.get("access_token") or data.get("accessToken") or ""
 
 
 @retry(stop=stop_after_attempt(4), wait=wait_exponential_jitter(1, 5), retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError)))
@@ -204,59 +183,9 @@ def _note_429(env_name: str, r: httpx.Response) -> None:
         _rate_limit_until[env_name] = max(_rate_limit_until.get(env_name, 0.0), time.time() + wait_for)
 
 
-@retry(stop=stop_after_attempt(4), wait=wait_exponential_jitter(1, 5), retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError)))
-def http_get(base: str, path: str, bearer: str, params: dict[str, Any]) -> dict[str, Any]:
-    # Determine company id from base
-    if base == API_BASE_PROD:
-        company = COMPANY_PROD or ""
-    elif base == API_BASE_DEV:
-        company = COMPANY_DEV or ""
-    else:
-        company = COMPANY_PROD or ""
-    url = _build_url(base, path, company)
-    headers = {"Authorization": f"Bearer {bearer}"}
-    # Multi-entity context header if targeting a sub-entity; skip for company-config objects
-    ent_id = ENTITY_ID_PROD if base == API_BASE_PROD else ENTITY_ID_DEV
-    if str(path).startswith("/objects/company-config/"):
-        ent_id = None
-    if ent_id:
-        headers["X-IA-API-Param-Entity"] = ent_id
-    # Certain objects require a newer API version than v1 (e.g., sales/*)
-    if ("/objects/sales/" in str(path)):
-        # Some tenants expect IA-API-Version, others IA-Api-Version
-        headers["IA-API-Version"] = "2"
-        headers["IA-Api-Version"] = "2"
-    env_name = _env_name_for_base(base)
-    _sleep_if_limited(env_name)
-    r = httpx.get(url, headers=headers, params=params, timeout=HTTP_TIMEOUT)
-    if r.status_code == 401:
-        _clear_token(env_name)
-        new_bearer = _ensure_token(env_name)
-        headers["Authorization"] = f"Bearer {new_bearer}"
-        r = httpx.get(url, headers=headers, params=params, timeout=HTTP_TIMEOUT)
-    if r.status_code == 429:
-        _note_429(env_name, r)
-        raise httpx.HTTPStatusError("Rate limited", request=r.request, response=r)
-    try:
-        r.raise_for_status()
-    except httpx.HTTPStatusError as e:  # improve error reporting
-        body = r.text
-        msg = f"{e} | body: {body[:1000]}"
-        raise httpx.HTTPStatusError(msg, request=r.request, response=r) from e
-    try:
-        return r.json()
-    except Exception:
-        return {}
-
-
-@retry(stop=stop_after_attempt(4), wait=wait_exponential_jitter(1, 5), retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError)))
-def http_post_json(base: str, path: str, bearer: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if base == API_BASE_PROD:
-        company = COMPANY_PROD or ""
-    elif base == API_BASE_DEV:
-        company = COMPANY_DEV or ""
-    else:
-        company = COMPANY_DEV or ""
+def _prepare_request(base: str, path: str, bearer: str) -> tuple[str, dict[str, str], str]:
+    """Build URL, headers, and env name for any Intacct API call."""
+    company = (COMPANY_PROD or "") if base == API_BASE_PROD else (COMPANY_DEV or "")
     url = _build_url(base, path, company)
     headers = {"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"}
     ent_id = ENTITY_ID_PROD if base == API_BASE_PROD else ENTITY_ID_DEV
@@ -264,131 +193,83 @@ def http_post_json(base: str, path: str, bearer: str, payload: dict[str, Any]) -
         ent_id = None
     if ent_id:
         headers["X-IA-API-Param-Entity"] = ent_id
-    if ("/objects/sales/" in str(path)):
+    if "/objects/sales/" in str(path):
         headers["IA-API-Version"] = "2"
         headers["IA-Api-Version"] = "2"
-    env_name = _env_name_for_base(base)
-    _sleep_if_limited(env_name)
-    r = httpx.post(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
-    if r.status_code == 401:
-        _clear_token(env_name)
-        new_bearer = _ensure_token(env_name)
-        headers["Authorization"] = f"Bearer {new_bearer}"
-        r = httpx.post(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
+    return url, headers, _env_name_for_base(base)
+
+
+def _handle_response(r: httpx.Response, env_name: str) -> dict[str, Any]:
+    """Handle 429, raise with body context on errors, return parsed JSON."""
     if r.status_code == 429:
         _note_429(env_name, r)
         raise httpx.HTTPStatusError("Rate limited", request=r.request, response=r)
     try:
         r.raise_for_status()
-    except httpx.HTTPStatusError as e:  # improve error reporting
-        body = r.text
-        msg = f"{e} | body: {body[:1000]}"
+    except httpx.HTTPStatusError as e:
+        msg = f"{e} | body: {r.text[:1000]}"
         raise httpx.HTTPStatusError(msg, request=r.request, response=r) from e
     try:
         return r.json()
     except Exception:
         return {}
+
+
+@retry(stop=stop_after_attempt(4), wait=wait_exponential_jitter(1, 5), retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError)))
+def _request(method: str, base: str, path: str, bearer: str, *, params: dict[str, Any] | None = None, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    url, headers, env_name = _prepare_request(base, path, bearer)
+    _sleep_if_limited(env_name)
+    send = getattr(httpx, method)
+    kwargs: dict[str, Any] = {"headers": headers, "timeout": HTTP_TIMEOUT}
+    if params is not None:
+        kwargs["params"] = params
+    if payload is not None:
+        kwargs["json"] = payload
+    r = send(url, **kwargs)
+    if r.status_code == 401:
+        _clear_token(env_name)
+        headers["Authorization"] = f"Bearer {_ensure_token(env_name)}"
+        kwargs["headers"] = headers
+        r = send(url, **kwargs)
+    return _handle_response(r, env_name)
+
+
+def http_get(base: str, path: str, bearer: str, params: dict[str, Any]) -> dict[str, Any]:
+    return _request("get", base, path, bearer, params=params)
+
+
+def http_post_json(base: str, path: str, bearer: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return _request("post", base, path, bearer, payload=payload)
+
+
+def http_patch_json(base: str, path: str, bearer: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return _request("patch", base, path, bearer, payload=payload)
 
 
 async def http_post_json_async(
     base: str,
     path: str,
     bearer: str,
-    payload: dict[str, _Any],
+    payload: dict[str, Any],
     *,
     client: httpx.AsyncClient | None = None,
-) -> dict[str, _Any]:
-    if base == API_BASE_PROD:
-        company = COMPANY_PROD or ""
-    elif base == API_BASE_DEV:
-        company = COMPANY_DEV or ""
-    else:
-        company = COMPANY_DEV or ""
-    url = _build_url(base, path, company)
-    headers = {"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"}
-    ent_id = ENTITY_ID_PROD if base == API_BASE_PROD else ENTITY_ID_DEV
-    if str(path).startswith("/objects/company-config/"):
-        ent_id = None
-    if ent_id:
-        headers["X-IA-API-Param-Entity"] = ent_id
-    if ("/objects/sales/" in str(path)):
-        headers["IA-API-Version"] = "2"
-        headers["IA-Api-Version"] = "2"
+) -> dict[str, Any]:
+    url, headers, env_name = _prepare_request(base, path, bearer)
     close_client = False
     if client is None:
         client = httpx.AsyncClient(http2=True, timeout=HTTP_TIMEOUT)
         close_client = True
     try:
-        env_name = _env_name_for_base(base)
-        # cooperative wait if previously limited
         until = _rate_limit_until.get(env_name, 0.0)
         now = time.time()
         if until > now:
             await asyncio.sleep(until - now)
         r = await client.post(url, headers=headers, json=payload)
         if r.status_code == 401:
-            # refresh token synchronously (rare in async path)
-            env_name = "prod" if base == API_BASE_PROD else "dev"
             _clear_token(env_name)
-            new_bearer = _ensure_token(env_name)
-            headers["Authorization"] = f"Bearer {new_bearer}"
+            headers["Authorization"] = f"Bearer {_ensure_token(env_name)}"
             r = await client.post(url, headers=headers, json=payload)
-        if r.status_code == 429:
-            _note_429(env_name, r)
-            raise httpx.HTTPStatusError("Rate limited", request=r.request, response=r)
-        try:
-            r.raise_for_status()
-        except httpx.HTTPStatusError as e:  # improve error payload
-            body = r.text
-            msg = f"{e} | body: {body[:1000]}"
-            raise httpx.HTTPStatusError(msg, request=r.request, response=r) from e
-        try:
-            return r.json()
-        except Exception:
-            return {}
+        return _handle_response(r, env_name)
     finally:
         if close_client:
             await client.aclose()
-
-
-@retry(stop=stop_after_attempt(4), wait=wait_exponential_jitter(1, 5), retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError)))
-def http_patch_json(base: str, path: str, bearer: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if base == API_BASE_PROD:
-        company = COMPANY_PROD or ""
-    elif base == API_BASE_DEV:
-        company = COMPANY_DEV or ""
-    else:
-        company = COMPANY_DEV or ""
-    url = _build_url(base, path, company)
-    headers = {"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"}
-    ent_id = ENTITY_ID_PROD if base == API_BASE_PROD else ENTITY_ID_DEV
-    if str(path).startswith("/objects/company-config/"):
-        ent_id = None
-    if ent_id:
-        headers["X-IA-API-Param-Entity"] = ent_id
-    if str(path).startswith("/objects/sales/"):
-        headers["IA-API-Version"] = "2"
-        headers["IA-Api-Version"] = "2"
-    env_name = _env_name_for_base(base)
-    _sleep_if_limited(env_name)
-    r = httpx.patch(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
-    if r.status_code == 401:
-        _clear_token(env_name)
-        new_bearer = _ensure_token(env_name)
-        headers["Authorization"] = f"Bearer {new_bearer}"
-        r = httpx.patch(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
-    if r.status_code == 429:
-        _note_429(env_name, r)
-        raise httpx.HTTPStatusError("Rate limited", request=r.request, response=r)
-    try:
-        r.raise_for_status()
-    except httpx.HTTPStatusError as e:  # improve error reporting
-        body = r.text
-        msg = f"{e} | body: {body[:1000]}"
-        raise httpx.HTTPStatusError(msg, request=r.request, response=r) from e
-    try:
-        return r.json()
-    except Exception:
-        return {}
-
-  # end
